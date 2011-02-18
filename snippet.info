@@ -1,0 +1,5 @@
+name = Snippet
+description = Specify a file whose contents should be included as panel content.
+dependencies[] = ctools
+package = Brightec
+core = 7.x

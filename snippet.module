@@ -1,0 +1,76 @@
+<?php
+
+// (c) 2011 Brightec Ltd.
+
+
+// this does the heavy lifting of finding all the available snippets.
+// name is used as the block delta, and is made up of module and filename
+// as follows: example.html in the foo module becomes 'foo-example'.
+
+class snippet_block {
+  var $module;
+  var $file;
+  var $name;
+  
+  static function load_all() {
+    $result = array();
+     
+    foreach (module_implements('snippet_directory') as $module) {
+      $dir = module_invoke($module, 'snippet_directory');
+      if (empty($dir)) {
+        continue;
+      }
+      
+      $dir = drupal_get_path('module', $module) . '/' . $dir;
+      foreach (file_scan_directory($dir, '/\.html$/') as $file) {
+        $sb = new snippet_block();
+        $sb->module = $module;
+        $sb->file = $file;
+        $sb->name = $module . '-' . $file->name;
+        $result[] = $sb;
+      }
+    }
+    
+    return $result;
+  }
+}
+
+
+/**
+ * Implements hook_block_info().
+ */
+function snippet_block_info() {
+  $blocks = array();
+  foreach (snippet_block::load_all() as $sb) {
+    $blocks[$sb->name] = array(
+      'info' => 'Snippet: ' . $sb->file->filename,
+    	'cache' => DRUPAL_CACHE_GLOBAL,
+    );
+  }
+  return $blocks;
+}
+
+
+/**
+ * Implements hook_block_view().
+ */
+function snippet_block_view($delta = '') {
+  foreach (snippet_block::load_all() as $sb) {
+    if ($delta == $sb->name) {
+      return array(
+        'subject' => NULL,
+      	'content' => file_get_contents($sb->file->uri),
+      );
+    }
+  }
+}
+
+
+/**
+ * Implements hook_ctools_block_info().
+ */
+function snippet_ctools_block_info($module, $delta, &$info) {
+  $info['category'] = t('Snippets');
+  return $info;
+}
+

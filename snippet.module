@@ -27,12 +27,12 @@ class snippet_block {
         $sb->module = $module;
         $sb->file = $file;
 
-				// if name longer than 32 chars then truncate as delta field in db is varchar(32)      
+        // if name longer than 32 chars then truncate as delta field in db is varchar(32)
 				$name = $module . '-' . $file->name;				
-				if(strlen($name) >= 32) {
-					$name = substr($name, 0, 32);
-				}        
-        
+        if(strlen($name) >= 32) {
+          $name = substr($name, 0, 32);
+        }
+
         $sb->name = $name;
         $result[] = $sb;
       }

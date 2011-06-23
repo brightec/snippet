@@ -11,33 +11,49 @@ class snippet_block {
   var $module;
   var $file;
   var $name;
+  var $inline;
+
+  static function load_in_directory($module, $dir, $inline) {
+    $result = array();
+
+    foreach (file_scan_directory($dir, '/\.html$/') as $file) {
+      $sb = new snippet_block();
+      $sb->module = $module;
+      $sb->file = $file;
+      $sb->inline = $inline;
+
+      // if name longer than 32 chars then truncate as delta field in db is varchar(32)
+      $name = $module . '-' . $file->name;
+      if(strlen($name) >= 32) {
+        $name = substr($name, 0, 32);
+      }
+
+      $sb->name = $name;
+      $result[] = $sb;
+    }
+
+    return $result;
+  }
   
   static function load_all() {
     $result = array();
-     
+
     foreach (module_implements('snippet_directory') as $module) {
       $dir = module_invoke($module, 'snippet_directory');
-      if (empty($dir)) {
-        continue;
-      }
-      
-      $dir = drupal_get_path('module', $module) . '/' . $dir;
-      foreach (file_scan_directory($dir, '/\.html$/') as $file) {
-        $sb = new snippet_block();
-        $sb->module = $module;
-        $sb->file = $file;
-
-        // if name longer than 32 chars then truncate as delta field in db is varchar(32)
-				$name = $module . '-' . $file->name;				
-        if(strlen($name) >= 32) {
-          $name = substr($name, 0, 32);
-        }
-
-        $sb->name = $name;
-        $result[] = $sb;
+      if (!empty($dir)) {
+        $dir = drupal_get_path('module', $module) . '/' . $dir;
+        $result = array_merge($result, snippet_block::load_in_directory($module, $dir, FALSE));
       }
     }
     
+    foreach (module_implements('snippet_inline_directory') as $module) {
+      $dir = module_invoke($module, 'snippet_inline_directory');
+      if (!empty($dir)) {
+        $dir = drupal_get_path('module', $module) . '/' . $dir;
+        $result = array_merge($result, snippet_block::load_in_directory($module, $dir, TRUE));
+      }
+    }
+
     return $result;
   }
 }
@@ -79,5 +95,44 @@ function snippet_block_view($delta = '') {
 function snippet_ctools_block_info($module, $delta, &$info) {
   $info['category'] = t('Snippets');
   return $info;
+}
+
+
+/**
+ * Implements hook_filter_info().
+ */
+function snippet_filter_info() {
+  $filters = array(
+    'snippet_inline' => array(
+      'title' => t('Inline snippets filter'),
+      'description' => t('Allows snippets to be included in formatted text.'),
+      'process callback' => '_snippet_filter_process',
+      'tips callback' => '_snippet_filter_tips',
+      'cache' => TRUE,
+    ),
+  );
+  return $filters;
+}
+
+
+function _snippet_filter_process($text, $filter, $format) {
+  foreach (snippet_block::load_all() as $sb) {
+    if ($sb->inline) {
+      $contents = file_get_contents($sb->file->uri);
+      $text = preg_replace('/\[snippet:' . $sb->name . '\]/', $contents, $text);
+    }
+  }
+  return $text;
+}
+
+
+function _snippet_filter_tips($filter, $format, $long = FALSE) {
+  $list = array();
+  foreach (snippet_block::load_all() as $sb) {
+    if ($sb->inline) {
+      $list[] = '[snippet:' . $sb->name . ']';
+    }
+  }
+  return t('Available snippets: ' . implode(', ', $list));
 }
 
